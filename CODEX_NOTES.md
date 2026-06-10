@@ -2,6 +2,8 @@
 
 This project is now a browser-only static app. Do not reintroduce a backend, database, login system, account management, or server-side API proxy unless the user explicitly asks for a different product direction.
 
+Public demo domain: `https://zuotu.art/`
+
 ## Project Shape
 
 - `src/StandaloneApp.tsx`: main app
@@ -20,7 +22,8 @@ This project is now a browser-only static app. Do not reintroduce a backend, dat
 
 ## Product Rules
 
-- This is an infinite-canvas AI image generation workflow.
+- `/` is a simple homepage with product introduction and online-use links.
+- `/#canvas` is the infinite-canvas AI image generation workflow.
 - It also includes a simple step-by-step image generation page named `海豹生图`.
 - The simple generation page is reached by `/#generate` and must share the same settings as the canvas.
 - The app is only for generating images.

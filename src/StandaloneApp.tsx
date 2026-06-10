@@ -146,10 +146,16 @@ type DirectGenerateInput = {
   referenceImages: ReferenceImage[]
 }
 
-type AppPage = 'canvas' | 'simple'
+type AppPage = 'home' | 'canvas' | 'simple'
+
+type HomePageProps = {
+  onOpenCanvas: () => void
+  onOpenSimple: () => void
+}
 
 type SimpleGeneratePageProps = {
   settings: ApiSettings
+  onOpenHome: () => void
   onOpenCanvas: () => void
   onOpenSettings: () => void
 }
@@ -699,8 +705,14 @@ const nodeTypes = {
   result: ResultNode,
 }
 
+function pageFromHash(): AppPage {
+  if (window.location.hash === '#canvas') return 'canvas'
+  if (window.location.hash === '#generate') return 'simple'
+  return 'home'
+}
+
 function App() {
-  const [activePage, setActivePage] = useState<AppPage>(() => (window.location.hash === '#generate' ? 'simple' : 'canvas'))
+  const [activePage, setActivePage] = useState<AppPage>(() => pageFromHash())
   const [nodes, setNodes] = useState<AppNode[]>(initialNodes)
   const [edges, setEdges] = useState<Edge[]>(initialEdges)
   const [settings, setSettings] = useState<ApiSettings>(() => loadStandaloneSettings())
@@ -730,13 +742,14 @@ function App() {
       event.returnValue = ''
     }
 
+    if (activePage === 'home') return
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [])
+  }, [activePage])
 
   useEffect(() => {
     const handleHashChange = () => {
-      setActivePage(window.location.hash === '#generate' ? 'simple' : 'canvas')
+      setActivePage(pageFromHash())
     }
 
     window.addEventListener('hashchange', handleHashChange)
@@ -1261,7 +1274,7 @@ function App() {
   const saveSettings = () => persistSettings()
 
   const openCanvasPage = () => {
-    window.location.hash = ''
+    window.location.hash = 'canvas'
     setActivePage('canvas')
   }
 
@@ -1271,16 +1284,27 @@ function App() {
     setActivePage('simple')
   }
 
-  const openSettingsFromSimplePage = () => {
+  const openHomePage = () => {
     window.location.hash = ''
+    setSettingsOpen(false)
+    setActivePage('home')
+  }
+
+  const openSettingsFromSimplePage = () => {
+    window.location.hash = 'canvas'
     setActivePage('canvas')
     setSettingsOpen(true)
+  }
+
+  if (activePage === 'home') {
+    return <HomePage onOpenCanvas={openCanvasPage} onOpenSimple={openSimplePage} />
   }
 
   if (activePage === 'simple') {
     return (
       <SimpleGeneratePage
         settings={settings}
+        onOpenHome={openHomePage}
         onOpenCanvas={openCanvasPage}
         onOpenSettings={openSettingsFromSimplePage}
       />
@@ -1298,6 +1322,9 @@ function App() {
           </div>
         </div>
         <nav>
+          <button type="button" className="toolbar-button" onClick={openHomePage} title="返回首页">
+            首页
+          </button>
           <button type="button" className="toolbar-button" onClick={addPromptNode} title="新增提示词节点">
             <Plus size={17} />
             提示词
@@ -1513,7 +1540,99 @@ function App() {
   )
 }
 
-function SimpleGeneratePage({ settings, onOpenCanvas, onOpenSettings }: SimpleGeneratePageProps) {
+function HomePage({ onOpenCanvas, onOpenSimple }: HomePageProps) {
+  return (
+    <main className="home-page">
+      <header className="home-topbar">
+        <div className="simple-brand">
+          <span className="brand-mark">海</span>
+          <div>
+            <h1>海豹画布</h1>
+            <p>AI 图片生成工作流</p>
+          </div>
+        </div>
+        <nav>
+          <button type="button" className="toolbar-button" onClick={onOpenCanvas}>
+            无限画布
+          </button>
+          <button type="button" className="toolbar-button" onClick={onOpenSimple}>
+            海豹生图
+          </button>
+        </nav>
+      </header>
+
+      <section className="home-hero">
+        <div className="home-copy">
+          <p className="home-kicker">纯静态 · 浏览器直连 · OpenAI 兼容接口</p>
+          <h2>海豹画布</h2>
+          <p>
+            一个面向图片生成的轻量工作台。你可以用无限画布组织提示词、参考图、生图节点和结果节点，
+            也可以用普通页面快速完成一次图片生成。
+          </p>
+          <div className="home-actions">
+            <button type="button" className="home-primary" onClick={onOpenCanvas}>
+              在线使用无限画布
+            </button>
+            <button type="button" className="home-secondary" onClick={onOpenSimple}>
+              在线使用海豹生图
+            </button>
+          </div>
+        </div>
+
+        <div className="home-preview" aria-hidden="true">
+          <div className="home-node prompt">
+            <span>提示词</span>
+            <strong>描述画面、文字、风格</strong>
+          </div>
+          <div className="home-node reference">
+            <span>参考图</span>
+            <strong>上传、排序、复用</strong>
+          </div>
+          <div className="home-node generate">
+            <span>生图</span>
+            <strong>接口 · 模型 · 尺寸</strong>
+          </div>
+          <div className="home-node result">
+            <span>结果</span>
+            <strong>预览与下载</strong>
+          </div>
+          <i className="home-line one" />
+          <i className="home-line two" />
+          <i className="home-line three" />
+        </div>
+      </section>
+
+      <section className="home-feature-grid">
+        <article>
+          <h3>无限画布</h3>
+          <p>适合多提示词、多参考图、多模型组合生成。节点可自由连接，结果可以汇总到同一个结果节点。</p>
+        </article>
+        <article>
+          <h3>海豹生图</h3>
+          <p>适合快速完成单次生成。按规格、参考图、描述、结果四步操作，简单直接。</p>
+        </article>
+        <article>
+          <h3>纯静态部署</h3>
+          <p>没有后端和数据库，构建后上传 dist 目录即可部署。API Key 仅保存在用户浏览器本地。</p>
+        </article>
+      </section>
+
+      <footer className="home-footer">
+        <span>作者：梦迟</span>
+        <nav>
+          <a href="https://gitee.com/dindoor/zuohaibao" target="_blank" rel="noreferrer">
+            Gitee
+          </a>
+          <a href="https://github.com/hotlt/zuohaibao" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+        </nav>
+      </footer>
+    </main>
+  )
+}
+
+function SimpleGeneratePage({ settings, onOpenHome, onOpenCanvas, onOpenSettings }: SimpleGeneratePageProps) {
   const [step, setStep] = useState(1)
   const [ratio, setRatio] = useState<ImageRatio>('9:16')
   const [resolution, setResolution] = useState<ImageResolution>('2k')
@@ -1685,6 +1804,9 @@ function SimpleGeneratePage({ settings, onOpenCanvas, onOpenSettings }: SimpleGe
           </div>
         </div>
         <nav>
+          <button type="button" className="toolbar-button" onClick={onOpenHome}>
+            首页
+          </button>
           <button type="button" className="toolbar-button" onClick={onOpenCanvas}>
             <Image size={17} />
             无限画布

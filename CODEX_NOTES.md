@@ -23,9 +23,9 @@ Public demo domain: `https://zuotu.art/`
 ## Product Rules
 
 - `/` is a simple homepage with product introduction and online-use links.
-- `/#canvas` is the infinite-canvas AI image generation workflow.
+- `/canvas` is the infinite-canvas AI image generation workflow.
 - It also includes a simple step-by-step image generation page named `海豹生图`.
-- The simple generation page is reached by `/#generate` and must share the same settings as the canvas.
+- The simple generation page is reached by `/generate` and must share the same settings as the canvas.
 - The app is only for generating images.
 - UI copy should stay primarily Chinese.
 - The interface should remain compact and practical.

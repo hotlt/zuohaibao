@@ -62,8 +62,8 @@ http://127.0.0.1:5173/
 在线使用：
 
 - [首页](https://zuotu.art/)
-- [无限画布](https://zuotu.art/#canvas)
-- [海豹生图](https://zuotu.art/#generate)
+- [无限画布](https://zuotu.art/canvas)
+- [海豹生图](https://zuotu.art/generate)
 
 首页：
 
@@ -74,13 +74,13 @@ http://127.0.0.1:5173/
 无限画布：
 
 ```text
-/#canvas
+/canvas
 ```
 
 普通生图页面：
 
 ```text
-/#generate
+/generate
 ```
 
 首页提供两个在线使用入口。无限画布和普通生图页面顶部也有互相跳转按钮，并共享同一份接口设置。
@@ -125,7 +125,7 @@ http://127.0.0.1:5173/
 打开：
 
 ```text
-/#generate
+/generate
 ```
 
 使用步骤：
@@ -186,7 +186,7 @@ npm run preview
 - nginx
 - 宝塔静态站点
 
-如果部署在子目录，当前 Vite 配置已使用相对路径 `base: './'`，通常可以直接使用。
+当前项目使用目录路由，部署时需要让服务器把未知路径回退到 `index.html`。Caddy 配置示例见 [DEPLOY.md](./DEPLOY.md)。
 
 ## 隐私和安全
 

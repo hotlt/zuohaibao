@@ -705,14 +705,20 @@ const nodeTypes = {
   result: ResultNode,
 }
 
-function pageFromHash(): AppPage {
-  if (window.location.hash === '#canvas') return 'canvas'
-  if (window.location.hash === '#generate') return 'simple'
+function pageFromPath(): AppPage {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  if (path === '/canvas') return 'canvas'
+  if (path === '/generate') return 'simple'
   return 'home'
 }
 
+function navigateToPath(path: string) {
+  if (window.location.pathname === path) return
+  window.history.pushState(null, '', path)
+}
+
 function App() {
-  const [activePage, setActivePage] = useState<AppPage>(() => pageFromHash())
+  const [activePage, setActivePage] = useState<AppPage>(() => pageFromPath())
   const [nodes, setNodes] = useState<AppNode[]>(initialNodes)
   const [edges, setEdges] = useState<Edge[]>(initialEdges)
   const [settings, setSettings] = useState<ApiSettings>(() => loadStandaloneSettings())
@@ -748,12 +754,12 @@ function App() {
   }, [activePage])
 
   useEffect(() => {
-    const handleHashChange = () => {
-      setActivePage(pageFromHash())
+    const handlePopState = () => {
+      setActivePage(pageFromPath())
     }
 
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
   const updateNodeData = useCallback((id: string, patch: Partial<AppNodeData>) => {
@@ -1274,24 +1280,24 @@ function App() {
   const saveSettings = () => persistSettings()
 
   const openCanvasPage = () => {
-    window.location.hash = 'canvas'
+    navigateToPath('/canvas')
     setActivePage('canvas')
   }
 
   const openSimplePage = () => {
-    window.location.hash = 'generate'
+    navigateToPath('/generate')
     setSettingsOpen(false)
     setActivePage('simple')
   }
 
   const openHomePage = () => {
-    window.location.hash = ''
+    navigateToPath('/')
     setSettingsOpen(false)
     setActivePage('home')
   }
 
   const openSettingsFromSimplePage = () => {
-    window.location.hash = 'canvas'
+    navigateToPath('/canvas')
     setActivePage('canvas')
     setSettingsOpen(true)
   }

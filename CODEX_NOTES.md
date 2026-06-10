@@ -21,6 +21,8 @@ This project is now a browser-only static app. Do not reintroduce a backend, dat
 ## Product Rules
 
 - This is an infinite-canvas AI image generation workflow.
+- It also includes a simple step-by-step image generation page named `海豹生图`.
+- The simple generation page is reached by `/#generate` and must share the same settings as the canvas.
 - The app is only for generating images.
 - UI copy should stay primarily Chinese.
 - The interface should remain compact and practical.
@@ -28,6 +30,7 @@ This project is now a browser-only static app. Do not reintroduce a backend, dat
 - localStorage key: `seal-canvas-settings`
 - Do not add login, accounts, SQLite, Express, or API proxy code.
 - Do not hardcode shared API keys or private service secrets into frontend code.
+- Do not add a separate API Key settings dialog to `海豹生图`; it must use the canvas settings.
 - The configured image API must support browser CORS requests.
 - Keep the settings UI as a canvas overlay opened from the toolbar settings button.
 - The default prompt node must be empty.

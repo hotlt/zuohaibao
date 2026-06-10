@@ -1,60 +1,199 @@
-# Seal Canvas
+# 海豹画布
 
-Seal Canvas is a browser-only AI image generation canvas. It uses React Flow-style nodes to connect prompts, reference images, generation settings, and result previews into a lightweight image workflow.
+海豹画布是一个纯前端 AI 图片生成工具，包含两个页面：
 
-The app has no backend, no database, and no login system. Model API settings are saved in the current browser's `localStorage`.
+- `海豹画布`：无限画布式图片生成工作流
+- `海豹生图`：普通分步骤图片生成页面
 
-## Features
+项目没有后端、没有数据库、没有登录系统。所有模型接口设置都保存在当前浏览器的 `localStorage` 中，生图请求由浏览器直接发送到你配置的 API 服务。
 
-- Infinite canvas workflow for AI image generation
-- Prompt, reference image, generation, and result nodes
-- Multiple image providers and models
-- OpenAI-compatible image generation and image edit endpoints
-- Prompt optimization through an OpenAI-compatible chat completions endpoint
-- Local browser settings with no server-side storage
-- Static build output suitable for GitHub Pages, Netlify, Vercel, nginx, or any static hosting service
+## 功能
 
-## Requirements
+- 无限画布节点工作流
+- 普通分步骤生图页面
+- 提示词节点、参考图节点、生图节点、结果节点
+- 多接口、多模型配置
+- 参考图上传、拖拽上传、删除、排序
+- 支持文生图和参考图生图
+- 支持提示词优化
+- 支持结果预览和下载
+- 纯静态构建，可部署到任意静态站点服务
 
-- Node.js 22 or newer
-- npm 10 or newer
-- An image generation API compatible with:
-  - `POST /v1/images/generations`
-  - `POST /v1/images/edits`
-- Optional prompt optimization API compatible with:
-  - `POST /v1/chat/completions`
+## 环境要求
 
-The API must support browser CORS requests because Seal Canvas calls it directly from the browser.
+- Node.js 22 或更高版本
+- npm 10 或更高版本
+- 一个支持浏览器 CORS 请求的 OpenAI 兼容图片生成接口
 
-## Getting Started
+图片接口需要兼容：
+
+- `POST /v1/images/generations`
+- `POST /v1/images/edits`
+
+提示词优化接口可选，需要兼容：
+
+- `POST /v1/chat/completions`
+
+## 本地运行
+
+安装依赖：
 
 ```bash
 npm install
+```
+
+启动开发服务：
+
+```bash
 npm run dev
 ```
 
-Open the local Vite URL, then use the settings button in the canvas toolbar to configure your API base URL, API key, and models.
+打开终端显示的 Vite 地址，例如：
 
-## Build
+```text
+http://127.0.0.1:5173/
+```
+
+## 页面入口
+
+无限画布：
+
+```text
+/
+```
+
+普通生图页面：
+
+```text
+/#generate
+```
+
+两个页面顶部都有互相跳转按钮，并共享同一份接口设置。
+
+## 接口设置
+
+进入无限画布页面，点击顶部工具栏里的 `设置`。
+
+在设置面板中填写：
+
+- 接口名称
+- API 地址，例如 `https://api.example.com`
+- API Key
+- 模型列表，例如 `gpt-image-2`
+- LLM API 地址
+- LLM API Key
+- LLM 模型，例如 `gpt-5.4-mini`
+
+点击 `保存设置` 后，配置会保存到浏览器 `localStorage`。
+
+普通生图页面不提供单独的 API Key 设置，它会直接读取无限画布保存的接口配置。
+
+## 使用无限画布
+
+1. 点击 `提示词` 新增提示词节点。
+2. 在提示词节点中输入图片描述。
+3. 可选：点击 `参考图` 新增参考图节点并上传图片。
+4. 点击 `生图` 新增生图节点，选择接口、模型、比例、分辨率和质量。
+5. 将提示词节点、参考图节点连接到生图节点。
+6. 将生图节点连接到结果节点。
+7. 点击生图节点中的 `生成图片`。
+8. 在结果节点中预览或下载图片。
+
+说明：
+
+- 不连接参考图时走文生图接口。
+- 连接参考图且参考图节点里有图片时走参考图编辑接口。
+- 多个生图节点可以共用提示词、参考图和结果节点。
+
+## 使用海豹生图
+
+打开：
+
+```text
+/#generate
+```
+
+使用步骤：
+
+1. 在 `规格` 步骤选择接口、模型、比例、分辨率和质量。
+2. 在 `参考图` 步骤上传图片；不上传则默认文生图。
+3. 在 `描述` 步骤输入提示词，也可以点击 `优化提示词`。
+4. 点击 `开始生成图片`。
+5. 在 `结果` 步骤下载图片、重新生成或重新开始。
+
+参考图支持拖拽排序，提交给接口时会按页面上的排序发送。
+
+## 返回格式兼容
+
+生图结果支持多种常见返回格式，包括：
+
+- URL
+- `data:image/...;base64,...`
+- 裸 base64
+- `data: [{ url }]`
+- `data: [{ b64_json }]`
+- `result_urls`
+- `resultUrls`
+- `images`
+- `output`
+- `result`
+- `image_url`
+- `image`
+
+裸 base64 会自动转换成可预览和可下载的 data URL。
+
+## 构建
 
 ```bash
 npm run build
 ```
 
-The static site is generated into `dist/`.
+构建产物会输出到：
 
-To test the production build locally:
+```text
+dist/
+```
+
+本地预览构建结果：
 
 ```bash
 npm run preview
 ```
 
-## Privacy And Security
+## 部署
 
-Seal Canvas is a static web app. API keys are stored in the browser's `localStorage` under `seal-canvas-settings` and are sent directly from the browser to the configured API provider.
+这是一个纯静态项目。构建后把 `dist/` 目录部署到任意静态托管服务即可，例如：
 
-Do not deploy this app with shared API keys embedded in the source code. For public deployments, each user should configure their own API credentials.
+- Gitee Pages
+- GitHub Pages
+- Netlify
+- Vercel
+- nginx
+- 宝塔静态站点
 
-## License
+如果部署在子目录，当前 Vite 配置已使用相对路径 `base: './'`，通常可以直接使用。
+
+## 隐私和安全
+
+API Key 会保存在当前浏览器的 `localStorage` 中，key 名为：
+
+```text
+seal-canvas-settings
+```
+
+请求会从浏览器直接发送到你配置的 API 服务。
+
+不要把共享 API Key 写进源码，也不要把包含真实密钥的配置文件提交到仓库。公开部署时，建议让每个用户自行填写自己的接口信息。
+
+## 常用命令
+
+```bash
+npm run dev
+npm run build
+npm run preview
+npm run lint
+```
+
+## 开源协议
 
 MIT

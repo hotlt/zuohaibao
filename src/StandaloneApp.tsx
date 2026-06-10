@@ -146,6 +146,14 @@ type DirectGenerateInput = {
   referenceImages: ReferenceImage[]
 }
 
+type AppPage = 'canvas' | 'simple'
+
+type SimpleGeneratePageProps = {
+  settings: ApiSettings
+  onOpenCanvas: () => void
+  onOpenSettings: () => void
+}
+
 type ImageRatio = 'Auto' | '1:1' | '9:16' | '3:4' | '4:3' | '16:9'
 type ImageResolution = '1k' | '2k' | '4k' | 'custom'
 
@@ -692,6 +700,7 @@ const nodeTypes = {
 }
 
 function App() {
+  const [activePage, setActivePage] = useState<AppPage>(() => (window.location.hash === '#generate' ? 'simple' : 'canvas'))
   const [nodes, setNodes] = useState<AppNode[]>(initialNodes)
   const [edges, setEdges] = useState<Edge[]>(initialEdges)
   const [settings, setSettings] = useState<ApiSettings>(() => loadStandaloneSettings())
@@ -723,6 +732,15 @@ function App() {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActivePage(window.location.hash === '#generate' ? 'simple' : 'canvas')
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
   const updateNodeData = useCallback((id: string, patch: Partial<AppNodeData>) => {
@@ -1242,6 +1260,33 @@ function App() {
 
   const saveSettings = () => persistSettings()
 
+  const openCanvasPage = () => {
+    window.location.hash = ''
+    setActivePage('canvas')
+  }
+
+  const openSimplePage = () => {
+    window.location.hash = 'generate'
+    setSettingsOpen(false)
+    setActivePage('simple')
+  }
+
+  const openSettingsFromSimplePage = () => {
+    window.location.hash = ''
+    setActivePage('canvas')
+    setSettingsOpen(true)
+  }
+
+  if (activePage === 'simple') {
+    return (
+      <SimpleGeneratePage
+        settings={settings}
+        onOpenCanvas={openCanvasPage}
+        onOpenSettings={openSettingsFromSimplePage}
+      />
+    )
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -1297,6 +1342,10 @@ function App() {
           >
             <Settings size={17} />
             设置
+          </button>
+          <button type="button" className="toolbar-button" onClick={openSimplePage} title="打开普通生图页面">
+            <Sparkles size={17} />
+            海豹生图
           </button>
         </nav>
       </header>
@@ -1460,6 +1509,489 @@ function App() {
           </div>
         ) : null}
       </section>
+    </main>
+  )
+}
+
+function SimpleGeneratePage({ settings, onOpenCanvas, onOpenSettings }: SimpleGeneratePageProps) {
+  const [step, setStep] = useState(1)
+  const [ratio, setRatio] = useState<ImageRatio>('9:16')
+  const [resolution, setResolution] = useState<ImageResolution>('2k')
+  const [customWidth, setCustomWidth] = useState('1152')
+  const [customHeight, setCustomHeight] = useState('2048')
+  const [quality, setQuality] = useState('high')
+  const [providerId, setProviderId] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([])
+  const [draggingReferenceId, setDraggingReferenceId] = useState('')
+  const [resultItem, setResultItem] = useState<ResultItem | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const imageProviders = useMemo(() => normalizeImageProviders(settings), [settings])
+  const imageProvider = imageProviders.find((provider) => provider.id === providerId) || imageProviders[0]
+  const model = selectedModel && imageProvider?.models.includes(selectedModel)
+    ? selectedModel
+    : imageProvider?.models[0] || settings.imageModel
+  const outputSize = sizeForApi({
+    size: '',
+    ratio,
+    resolution,
+    customWidth,
+    customHeight,
+  })
+  const providerReady = Boolean(imageProvider?.baseUrl && imageProvider?.apiKey)
+  const progress = ((step - 1) / 3) * 100
+
+  const updateSimpleSize = (nextRatio: ImageRatio, nextResolution: ImageResolution) => {
+    const next = defaultCustomSize(nextRatio, nextResolution)
+    if (next) {
+      setCustomWidth(next.width)
+      setCustomHeight(next.height)
+    }
+  }
+
+  const changeRatio = (nextRatio: ImageRatio) => {
+    setRatio(nextRatio)
+    updateSimpleSize(nextRatio, resolution)
+  }
+
+  const changeResolution = (nextResolution: ImageResolution) => {
+    setResolution(nextResolution)
+    updateSimpleSize(ratio, nextResolution)
+  }
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files?.length) return
+    const images = await Promise.all(
+      Array.from(files)
+        .filter((file) => file.type.startsWith('image/'))
+        .slice(0, 10)
+        .map(async (file) => ({
+          id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
+          name: file.name,
+          dataUrl: await readFileAsDataUrl(file),
+        })),
+    )
+    setReferenceImages((current) => [...current, ...images].slice(0, 10))
+  }
+
+  const moveReferenceImage = (fromId: string, toId: string) => {
+    if (!fromId || fromId === toId) return
+    setReferenceImages((current) => {
+      const fromIndex = current.findIndex((image) => image.id === fromId)
+      const toIndex = current.findIndex((image) => image.id === toId)
+      if (fromIndex === -1 || toIndex === -1) return current
+      const nextImages = [...current]
+      const [movedImage] = nextImages.splice(fromIndex, 1)
+      nextImages.splice(toIndex, 0, movedImage)
+      return nextImages
+    })
+  }
+
+  const optimizeSimplePrompt = async () => {
+    if (!prompt.trim()) return
+    setIsOptimizing(true)
+    setError('')
+    setMessage('')
+    try {
+      const nextPrompt = await directOptimizePrompt(settings, prompt)
+      setPrompt(nextPrompt.slice(0, 1000))
+      setMessage('提示词已优化')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '提示词优化失败')
+    } finally {
+      setIsOptimizing(false)
+    }
+  }
+
+  const generateImage = async () => {
+    const cleanPrompt = prompt.trim()
+    setError('')
+    setMessage('')
+
+    if (!cleanPrompt) {
+      setStep(3)
+      setError('请先描述你想生成的图片。')
+      return
+    }
+    if (!outputSize) {
+      setStep(1)
+      setError('请检查自定义分辨率，宽高需为 64-8192 且总像素不超过 829 万。')
+      return
+    }
+    if (!imageProvider) {
+      setError('请先在无限画布的设置里添加生图接口。')
+      return
+    }
+
+    setStep(4)
+    setIsGenerating(true)
+    setResultItem(null)
+
+    try {
+      const job = await directGenerateImage({
+        provider: imageProvider,
+        model,
+        prompt: cleanPrompt,
+        size: outputSize,
+        quality,
+        referenceImages,
+      })
+      const url = job.resultUrls[0]
+      const item: ResultItem = {
+        id: `${job.jobId || 'simple'}-${Date.now()}`,
+        url,
+        status: 'done',
+        sourceNodeId: 'simple-generate',
+        sourceTitle: '海豹生图',
+        prompt: cleanPrompt,
+        model,
+        size: outputSize,
+        quality,
+        jobId: job.jobId || `simple-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      }
+      setResultItem(item)
+      setMessage('图片生成成功')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '生成失败')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const resetSimplePage = () => {
+    setStep(1)
+    setPrompt('')
+    setReferenceImages([])
+    setResultItem(null)
+    setPreviewOpen(false)
+    setMessage('')
+    setError('')
+  }
+
+  return (
+    <main className="simple-page">
+      <header className="simple-topbar">
+        <div className="simple-brand">
+          <span className="brand-mark">海</span>
+          <div>
+            <h1>海豹生图</h1>
+            <p>普通图片生成页面</p>
+          </div>
+        </div>
+        <nav>
+          <button type="button" className="toolbar-button" onClick={onOpenCanvas}>
+            <Image size={17} />
+            无限画布
+          </button>
+          <button type="button" className="toolbar-button" onClick={onOpenSettings}>
+            <Settings size={17} />
+            接口设置
+          </button>
+        </nav>
+      </header>
+
+      <section className="simple-main">
+        <div className="simple-progress" aria-label="生成步骤">
+          <div className="simple-progress-track" />
+          <div className="simple-progress-fill" style={{ transform: `scaleX(${progress / 100})` }} />
+          {['规格', '参考图', '描述', '结果'].map((label, index) => {
+            const value = index + 1
+            return (
+              <button
+                type="button"
+                className={`simple-step ${step === value ? 'active' : ''} ${step > value ? 'done' : ''}`}
+                onClick={() => setStep(value)}
+                disabled={isGenerating}
+                key={label}
+              >
+                <span>{value}</span>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {message || error ? (
+          <div className={`simple-toast ${error ? 'failed' : ''}`} role="status">
+            {error || message}
+          </div>
+        ) : null}
+
+        <section className="simple-card">
+          {step === 1 ? (
+            <div className="simple-section">
+              <div className="simple-section-head">
+                <h2>选择生成规格</h2>
+                <p>{imageProvider?.name || '未配置接口'} · {model || '未选择模型'} · {outputSize || '自定义尺寸无效'}</p>
+              </div>
+              {!providerReady ? (
+                <button type="button" className="simple-warning" onClick={onOpenSettings}>
+                  请先在无限画布设置里填写 API 地址和 Key
+                </button>
+              ) : null}
+              <div className="simple-provider-grid">
+                <label>
+                  <span>接口</span>
+                  <select
+                    value={imageProvider?.id || ''}
+                    onChange={(event) => {
+                      const provider = imageProviders.find((item) => item.id === event.target.value)
+                      setProviderId(event.target.value)
+                      setSelectedModel(provider?.models[0] || settings.imageModel)
+                    }}
+                  >
+                    {imageProviders.map((provider) => (
+                      <option value={provider.id} key={provider.id}>
+                        {provider.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>模型</span>
+                  <select value={model} onChange={(event) => setSelectedModel(event.target.value)}>
+                    {(imageProvider?.models.length ? imageProvider.models : [settings.imageModel]).map((item) => (
+                      <option value={item} key={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="simple-ratio-grid">
+                {ratioOptions.map((option) => (
+                  <button
+                    type="button"
+                    className={`simple-ratio ${ratio === option.value ? 'selected' : ''}`}
+                    onClick={() => changeRatio(option.value)}
+                    key={option.value}
+                  >
+                    <span className="ratio-frame-mini">
+                      {option.box ? (
+                        <span className="ratio-box-mini" style={{ width: option.box.width, height: option.box.height }} />
+                      ) : (
+                        <span className="auto-box-mini">AI</span>
+                      )}
+                    </span>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="simple-segment">
+                {(['1k', '2k', '4k', 'custom'] as ImageResolution[]).map((option) => (
+                  <button
+                    type="button"
+                    className={resolution === option ? 'selected' : ''}
+                    onClick={() => changeResolution(option)}
+                    key={option}
+                  >
+                    {option === 'custom' ? '自定义' : option.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              {resolution === 'custom' ? (
+                <div className="simple-custom-size">
+                  <label>
+                    宽
+                    <input value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} inputMode="numeric" />
+                  </label>
+                  <label>
+                    高
+                    <input value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} inputMode="numeric" />
+                  </label>
+                </div>
+              ) : null}
+              <div className="simple-segment">
+                {(['low', 'medium', 'high', 'auto'] as const).map((option) => (
+                  <button
+                    type="button"
+                    className={quality === option ? 'selected' : ''}
+                    onClick={() => setQuality(option)}
+                    key={option}
+                  >
+                    {qualityLabels[option]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="simple-section">
+              <div className="simple-section-head">
+                <h2>参考图</h2>
+                <p>不上传时默认走文生图接口；上传后走参考图编辑接口。</p>
+              </div>
+              <label
+                className="simple-upload"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  void handleFiles(event.dataTransfer.files)
+                }}
+              >
+                <UploadCloud size={26} />
+                <span>上传或拖入参考图片</span>
+                <input type="file" accept="image/*" multiple onChange={(event) => void handleFiles(event.target.files)} />
+              </label>
+              {referenceImages.length > 0 ? (
+                <div className="simple-reference-grid">
+                  {referenceImages.map((image, index) => (
+                    <figure
+                      className={draggingReferenceId === image.id ? 'dragging' : ''}
+                      draggable
+                      onDragStart={(event) => {
+                        setDraggingReferenceId(image.id)
+                        event.dataTransfer.setData('text/plain', image.id)
+                        event.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault()
+                        event.dataTransfer.dropEffect = 'move'
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        moveReferenceImage(draggingReferenceId || event.dataTransfer.getData('text/plain'), image.id)
+                        setDraggingReferenceId('')
+                      }}
+                      onDragEnd={() => setDraggingReferenceId('')}
+                      key={image.id}
+                    >
+                      <img src={image.dataUrl} alt={image.name} />
+                      <span>{index + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setReferenceImages((current) => current.filter((item) => item.id !== image.id))}
+                        title="删除参考图"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </figure>
+                  ))}
+                </div>
+              ) : (
+                <p className="simple-empty">当前没有参考图，将使用文生图。</p>
+              )}
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="simple-section">
+              <div className="simple-section-head">
+                <h2>描述图片</h2>
+                <p>写清主体、文字、构图、风格和用途。</p>
+              </div>
+              <div className="simple-prompt-wrap">
+                <textarea
+                  value={prompt}
+                  maxLength={1000}
+                  onChange={(event) => setPrompt(event.target.value.slice(0, 1000))}
+                  placeholder="例如：生成一张 9:16 竖版新品图片，主体是一杯冰镇青梅茶，主标题“夏日青梅冷萃”，画面清爽高级，有自然光、水珠和冰块，背景干净，字体现代。"
+                />
+                <div>
+                  <span>{prompt.length}/1000</span>
+                  <button type="button" onClick={optimizeSimplePrompt} disabled={isOptimizing || !prompt.trim()}>
+                    {isOptimizing ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />}
+                    优化提示词
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 4 ? (
+            <div className="simple-section">
+              <div className="simple-section-head">
+                <h2>{isGenerating ? '正在生成图片' : resultItem ? '图片已生成' : '等待生成'}</h2>
+                <p>{resultItem ? `${resultItem.model} · ${resultItem.size} · ${resultItem.quality}` : '生成较慢时请勿刷新页面。'}</p>
+              </div>
+              <div className={`simple-result ${resultItem ? 'has-image' : ''}`}>
+                {isGenerating ? (
+                  <div className="simple-loading">
+                    <Loader2 className="spin" size={32} />
+                    正在生成图片
+                  </div>
+                ) : resultItem ? (
+                  <button type="button" onClick={() => setPreviewOpen(true)}>
+                    <img src={resultItem.url} alt="生成结果" />
+                  </button>
+                ) : (
+                  <div className="simple-loading">回到描述步骤开始生成</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          <footer className="simple-actions">
+            {step > 1 ? (
+              <button
+                type="button"
+                className="mini-text-button simple-prev-button"
+                onClick={() => setStep((current) => Math.max(1, current - 1))}
+                disabled={isGenerating}
+              >
+                上一步
+              </button>
+            ) : null}
+            {step < 3 ? (
+              <button type="button" className="primary-button" onClick={() => setStep((current) => Math.min(4, current + 1))}>
+                下一步
+              </button>
+            ) : step === 4 && resultItem ? (
+              <button type="button" className="primary-button" onClick={() => void downloadImage(resultItem.url, resultItem)} disabled={isGenerating}>
+                <Download size={17} />
+                下载图片
+              </button>
+            ) : (
+              <button type="button" className="primary-button" onClick={generateImage} disabled={isGenerating}>
+                {isGenerating ? <Loader2 className="spin" size={16} /> : <Sparkles size={17} />}
+                {isGenerating ? '生成中' : '开始生成图片'}
+              </button>
+            )}
+            {step === 4 && resultItem ? (
+              <button type="button" className="mini-text-button" onClick={generateImage} disabled={isGenerating}>
+                重新生成
+              </button>
+            ) : null}
+            {step === 4 ? (
+              <button type="button" className="mini-text-button simple-reset-button" onClick={resetSimplePage} disabled={isGenerating}>
+                重新开始
+              </button>
+            ) : null}
+          </footer>
+        </section>
+      </section>
+
+      {previewOpen && resultItem ? (
+        <div className="preview-modal" role="dialog" aria-modal="true" onClick={() => setPreviewOpen(false)}>
+          <div className="preview-content" onClick={(event) => event.stopPropagation()}>
+            <div className="preview-head">
+              <div>
+                <h2>海豹生图</h2>
+                <p>{resultItem.model} · {resultItem.size} · {resultItem.quality}</p>
+              </div>
+              <div className="preview-actions">
+                <a href={resultItem.url} target="_blank" rel="noreferrer" title="打开原图">
+                  <ExternalLink size={17} />
+                </a>
+                <button type="button" onClick={() => void downloadImage(resultItem.url, resultItem)} title="下载图片">
+                  <Download size={17} />
+                </button>
+                <button type="button" onClick={() => setPreviewOpen(false)} title="关闭预览">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <img src={resultItem.url} alt="生成结果大图" />
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
@@ -1674,15 +2206,66 @@ function extractApiError(body: unknown, fallback: string) {
 }
 
 function extractImageUrls(body: unknown) {
-  const data = body as { data?: Array<{ url?: string; b64_json?: string } | string>; result_urls?: string[] } | null
-  return (Array.isArray(data?.data) ? data.data : [])
-    .map((item, index) => {
-      if (typeof item === 'string') return item
-      if (item?.url) return item.url
-      if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`
-      return data?.result_urls?.[index] || ''
-    })
-    .filter(Boolean)
+  const output: string[] = []
+  const seen = new Set<string>()
+
+  const addImage = (value: unknown) => {
+    const normalized = normalizeImageSource(value)
+    if (!normalized || seen.has(normalized)) return
+    seen.add(normalized)
+    output.push(normalized)
+  }
+
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 4 || value == null) return
+    if (typeof value === 'string') {
+      addImage(value)
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, depth + 1))
+      return
+    }
+    if (!isRecord(value)) return
+
+    addImage(value.url)
+    addImage(value.image_url)
+    addImage(value.imageUrl)
+    addImage(value.b64_json)
+    addImage(value.base64)
+    addImage(value.image_base64)
+    addImage(value.imageBase64)
+    addImage(value.image)
+
+    visit(value.image_url, depth + 1)
+    visit(value.imageUrl, depth + 1)
+    visit(value.image, depth + 1)
+    visit(value.data, depth + 1)
+    visit(value.images, depth + 1)
+    visit(value.result_urls, depth + 1)
+    visit(value.resultUrls, depth + 1)
+    visit(value.output, depth + 1)
+    visit(value.result, depth + 1)
+  }
+
+  visit(body)
+  return output
+}
+
+function normalizeImageSource(value: unknown) {
+  if (typeof value !== 'string') return ''
+  const source = value.trim()
+  if (!source) return ''
+  if (/^(https?:|data:image\/|blob:)/i.test(source)) return source
+  const base64Payload = source.replace(/^data:[^,]+,/, '').replace(/\s/g, '')
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(base64Payload) && base64Payload.length > 80) {
+    return `data:image/png;base64,${base64Payload}`
+  }
+  return ''
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function dataUrlToFile(dataUrl: string, fileName: string) {

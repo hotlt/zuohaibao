@@ -2,7 +2,7 @@
 
 This project is now a browser-only static app. Do not reintroduce a backend, database, login system, account management, or server-side API proxy unless the user explicitly asks for a different product direction.
 
-Public demo domain: `https://zuotu.art/`
+Public demo domain: `https://huabu.xin/`
 
 ## Project Shape
 

@@ -57,13 +57,13 @@ http://127.0.0.1:5173/
 
 ## 页面入口
 
-演示站点：[https://zuotu.art/](https://zuotu.art/)
+演示站点：[https://huabu.xin/](https://huabu.xin/)
 
 在线使用：
 
-- [首页](https://zuotu.art/)
-- [无限画布](https://zuotu.art/canvas)
-- [海豹生图](https://zuotu.art/generate)
+- [首页](https://huabu.xin/)
+- [无限画布](https://huabu.xin/canvas)
+- [海豹生图](https://huabu.xin/generate)
 
 首页：
 

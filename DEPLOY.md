@@ -3,7 +3,7 @@
 本项目是纯静态前端应用，线上域名为：
 
 ```text
-https://zuotu.art/
+https://huabu.xin/
 ```
 
 当前使用目录路由：
@@ -47,14 +47,14 @@ assets/
 假设静态文件目录是：
 
 ```text
-/www/wwwroot/zuotu.art
+/www/wwwroot/huabu.xin
 ```
 
 Caddyfile 示例：
 
 ```caddyfile
-zuotu.art {
-    root * /www/wwwroot/zuotu.art
+huabu.xin {
+    root * /www/wwwroot/huabu.xin
     encode zstd gzip
 
     try_files {path} {path}/ /index.html
@@ -62,11 +62,11 @@ zuotu.art {
 }
 ```
 
-如果同时使用 `www.zuotu.art`：
+如果同时使用 `www.huabu.xin`：
 
 ```caddyfile
-zuotu.art, www.zuotu.art {
-    root * /www/wwwroot/zuotu.art
+huabu.xin, www.huabu.xin {
+    root * /www/wwwroot/huabu.xin
     encode zstd gzip
 
     try_files {path} {path}/ /index.html
@@ -85,11 +85,11 @@ caddy reload --config /etc/caddy/Caddyfile
 部署后打开：
 
 ```text
-https://zuotu.art/
-https://zuotu.art/canvas
-https://zuotu.art/generate
+https://huabu.xin/
+https://huabu.xin/canvas
+https://huabu.xin/generate
 ```
 
 如果首页正常，但 `/canvas` 或 `/generate` 404，说明 Caddy 的 `try_files {path} {path}/ /index.html` 没有生效。
 
-如果页面能打开但不能生图，通常是模型 API 不允许 `https://zuotu.art` 跨域请求，需要在 API 服务侧开启 CORS。
+如果页面能打开但不能生图，通常是模型 API 不允许 `https://huabu.xin` 跨域请求，需要在 API 服务侧开启 CORS。
